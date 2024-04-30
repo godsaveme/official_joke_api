@@ -1,13 +1,18 @@
 const express = require('express');
+const bodyParser = require('body-parser')
 const LimitingMiddleware = require('limiting-middleware');
-const { randomJoke, randomTen, randomSelect, jokeByType, jokeById } = require('./handler');
+const { randomJoke, randomTen, randomSelect, jokeByType, jokeById, jokesPagination, ratingUpdate, jokeSorting, jokeDefaultSorting, jokeSave } = require('./handler');
 
 const app = express();
 
 app.use(new LimitingMiddleware().limitByIp());
 
+app.use(bodyParser.json()) // for parsing application/json
+app.use(bodyParser.urlencoded({ extended: true }))
+
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', '*');
   next();
 });
 
@@ -62,6 +67,13 @@ app.get('/jokes/:type/ten', (req, res) => {
   res.json(jokeByType(req.params.type, 10));
 });
 
+
+
+/**
+ * @description endpoint to get joke by id
+ * @param {Number} id - joke id
+ */
+
 app.get('/jokes/:id', (req, res, next) => {
   try {
     const { id } = req.params;
@@ -72,6 +84,69 @@ app.get('/jokes/:id', (req, res, next) => {
     return next(e);
   }
 });
+
+
+
+/**
+ * @description endpoint for pagination and sorting jokes
+ * @param {Number} page - page number 
+ * @param {Number} limit - number of jokes per page
+ * @param {String} type - sorting type
+ * @param {String} order - sorting order (asc, desc)
+ */
+
+app.get('/jokes', (req, res, next) => {
+  try{
+    const { page, limit, type, order } = req.query;
+    jokeDefaultSorting();
+
+    if(type && order) jokeSorting(type, order);
+    
+    const jokesPaginationArr = jokesPagination(page, limit);
+    if(!jokesPaginationArr) return next({ statusCode:409, message: 'joke pagination incorrect' });
+    return res.json(jokesPaginationArr);
+  } catch (e) {
+    return next(e);
+  }
+});
+
+
+/**
+ * @description endpoint to update joke rating
+ * @param {Number} id - joke id
+ * @param {String} rating - joke rating
+ */
+
+app.get('/joke/rating/update', (req, res, next) => {
+  try{
+    const { id, rating } = req.query;
+    const updatedJoke = ratingUpdate(id, rating);
+    if(!updatedJoke) return next({ statusCode:409, message: 'joke updated error' });
+    return res.json(updatedJoke);
+  } catch (e) {
+    return next(e);
+  }
+});
+
+
+
+/**
+ * @description endpoint to create a joke
+ * @param {Joke} joke - joke text
+ */
+
+app.post('/joke/create', (req, res, next) => {
+  try{
+    const { joke } = req.body;
+    if(!joke) return next({ statusCode:409, message: 'joke not found' });
+    const jokeSaved = jokeSave(joke);
+    return res.json(jokeSaved);
+  } catch (e) {
+    return next(e);
+  }
+});
+
+
 
 app.use((err, req, res, next) => {
   const statusCode = err.statusCode || 500;
